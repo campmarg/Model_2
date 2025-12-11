@@ -7,6 +7,13 @@
 #   the OR Coastline shapefile (or_coastline_proj.shp)
 #   the trawl data downloaded (Trawl 05-22 Fixed_E.xlsx) 
 #   the fixed gear data downloaded (FG 05-22 Fixed_E.xlsx)
+    #SDM data from: Liu, O. R., E. J. Ward, S. C. Anderson, K. S. Andrews, 
+    #L. A. K. Barnett, S. Brodie, G. Carroll, J. Fiechter, M. A. Haltuch, 
+    #C. J. Harvey, E. L. Hazen, P.-Y. Hernvann, M. Jacox, I. C. Kaplan, 
+    #S. Matson, K. Norman, M. P. Buil, R. L. Selden, A. Shelton, and J. R. Samhouri. 
+    #(2023). Species redistribution creates unequal outcomes for multispecies 
+    #fisheries under projected climate change. Science Advances. 
+    #trawl and fixed gear dataset from the Oregon Deparment of Fish and Wildlife 
 # Step 2: Run HR_2D.R
 # Step 3: Run leslie_matrix.R
 # Step 4: Run spatial_model2.R
