@@ -65,10 +65,10 @@ coastline_function <- function() {
     summarise(
       trips = n(),
       total_lcod = sum(lcod),
-      within_brookings = as.numeric(any(within_brookings)),
-      within_coos = as.numeric(any(within_coos)),
-      p_within_brookings = as.numeric(any(p_within_brookings)),
-      p_within_coos = as.numeric(any(p_within_coos))
+      within_brookings = as.numeric(mean(within_brookings)),
+      within_coos = as.numeric(mean(within_coos)),
+      p_within_brookings = as.numeric(mean(p_within_brookings)),
+      p_within_coos = as.numeric(mean(p_within_coos))
     ) %>%
     ungroup() %>%
     arrange(lat_km_r, long_km_r)
@@ -145,10 +145,10 @@ coastline_function <- function() {
     summarise(
       trips = n(),
       total_lcod = sum(lcod),
-      within_brookings = as.numeric(any(within_brookings)),
-      within_coos = as.numeric(any(within_coos)),
-      p_within_brookings = as.numeric(any(p_within_brookings)),
-      p_within_coos = as.numeric(any(p_within_coos))
+      within_brookings = as.numeric(mean(within_brookings)),
+      within_coos = as.numeric(mean(within_coos)),
+      p_within_brookings = as.numeric(mean(p_within_brookings)),
+      p_within_coos = as.numeric(mean(p_within_coos))
     ) %>%
     ungroup() %>%
     arrange(lat_km_r, long_km_r)
@@ -180,10 +180,10 @@ coastline_function <- function() {
     reframe(
       trips = n(),
       total_lcod = sum(total_lcod),
-      within_brookings = unique(within_brookings),
-      within_coos = unique(within_coos),
-      p_within_brookings = unique(p_within_brookings),
-      p_within_coos = unique(p_within_coos)
+      within_brookings = mean(within_brookings),
+      within_coos = mean(within_coos),
+      p_within_brookings = mean(p_within_brookings),
+      p_within_coos = mean(p_within_coos)
     ) %>%
     ungroup() %>%
     arrange(lat_km_r, long_km_r)
@@ -193,10 +193,10 @@ coastline_function <- function() {
     reframe(
       trips = n(),
       total_lcod = sum(total_lcod),
-      within_brookings = unique(within_brookings),
-      within_coos = unique(within_coos),
-      p_within_brookings = unique(p_within_brookings),
-      p_within_coos = unique(p_within_coos)
+      within_brookings = mean(within_brookings),
+      within_coos = mean(within_coos),
+      p_within_brookings = mean(p_within_brookings),
+      p_within_coos = mean(p_within_coos)
     ) %>%
     ungroup() %>%
     arrange(lat_km_r, long_km_r)

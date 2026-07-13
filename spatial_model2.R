@@ -47,12 +47,14 @@
 #'
 #' @author Margaret Campbell
 #' @keywords spatial model population dynamics fishing mortality recruitment
-spatial_model2 <- function(Tmax, X, hab_means, HR, f, a, params, trips, D, Option) {
+spatial_model2 <- function(Tmax, X, hab_means, HR, f, a, params, trips, D, Option,Option2) {
   #Define Constants
   
   #Option A - None
   #Option B - p coos & brookings
   #Option C - p coos & p brookings
+  
+  #Option2 is 'constant' or 'increase' in level of F following OWF
 
   z<-0
   Amax <- params$Amax
@@ -133,15 +135,34 @@ for (t in 2:Tmax) {
   Xtmp = x
   #Check which loop - OWF or no
   if (t >= 200 && Option == "B") {
-    scaled_CPUE <- trips  #sclaed_CPUE should be a vector changed every time step
-    scaled_CPUE[brookings_windfarm == 1] <- 0 
-    scaled_CPUE[p_coos_windfarm == 1] <- 0 
+    scaled_CPUE <- trips  #scaled_CPUE should be a vector changed every time step
+    
+    # old approach: windfarm vectors were logical 0 or 1:
+    #scaled_CPUE[brookings_windfarm == 1] <- 0 
+    #scaled_CPUE[p_coos_windfarm == 1] <- 0 
+    
+    # Update: Now make it a scaled proportion.
+    # Remove effort from OWF cells
+    scaled_CPUE = scaled_CPUE * (1 - brookings_windfarm) * (1 - p_coos_windfarm)
+    # Rescale so effort is maintained
+    f_factor = sum(scaled_CPUE)/sum(trips)
+    scaled_CPUE = scaled_CPUE / f_factor
+    
   } else if (t >= 200 && Option == "C") {
     scaled_CPUE <-  trips 
-    scaled_CPUE[p_brookings_windfarm == 1] <- 0 
-    scaled_CPUE[p_coos_windfarm == 1] <- 0
+   # scaled_CPUE[p_brookings_windfarm == 1] <- 0 
+  #  scaled_CPUE[p_coos_windfarm == 1] <- 0
+    
+    # Update: Now make it a scaled proportion:
+    # Remove effort from OWF cells
+    scaled_CPUE = scaled_CPUE * (1 - p_brookings_windfarm) * (1 - p_coos_windfarm)
+    # Rescale so effort is maintained
+    f_factor = sum(scaled_CPUE)/sum(trips)
+    scaled_CPUE = scaled_CPUE / f_factor
+
   } else { #Check if t is less than 200
     scaled_CPUE <- trips 
+    f_factor = 1
     #store CPUE in those locations - then add that value back to all nonOWF locations
     #F can't be happening in these locations
   }
@@ -155,9 +176,60 @@ for (t in 2:Tmax) {
   if (mean(scaled_CPUE) == 0) {
     Fvec <- scaled_CPUE * f / 1 
   } else {
-    Fvec = scaled_CPUE*f/mean(scaled_CPUE) # Fvec is fishing rate over space
+    scaled_CPUE = scaled_CPUE/sum(trips) #redistribute last effort in the OWF - new April
+    
+    if (Option2 == 'Constant'){
+    ftmp = f
+    } else if (Option2 == 'Increase'){
+
+      
+      if (t < 200){
+        ftmp = f/f_factor
+      } else if (t >= 200){
+        # Have to figure out what F would have to be to maintain the same yield
+        
+        ###########
+        Target = sum(Y[,199]) # target value of yield
+        Ntmp = Nt[,,t-1] # previous population size
+        Ntmp2 = Ntmp*0
+        Deadtmp = matrix(0,nrow=(Amax-1),ncol=length(hab_means))
+        Ytmp = rep(0,length(hab_means))
+        ftmps = f*seq(from = 0.9,to=1.2, by=0.005) # range of possible increases in F
+        Ytot_tmp = rep(0,length(ftmps))
+        for (ff in 1:length(ftmps)){
+          Fvec = ftmps[ff]*scaled_CPUE/mean(scaled_CPUE)
+          Fvec_HR <- HR %*% Fvec
+          for (x in 1:length(hab_means)) {
+          m_spec <- leslie_matrix(params = tparam(), Fvec_HR = Fvec_HR[x]) 
+          Ntmp2[,x] <- as.matrix(m_spec) %*% as.matrix(Ntmp[, x])
+          Deadtmp[,x] <- (Ntmp[1:(Amax-1),x]) - (Ntmp2[2:Amax,x])
+          Ytmp[x] <- sum(Deadtmp[,x] * ( Fvec_HR[x] * (params$Af_t[1:(Amax-1)])) / (M+( Fvec_HR[x] * (params$Af_t[1:(Amax-1)])))) # use  Fvec_HR[x], the distributed fishing effort
+          } # end loop over space
+          Ytot_tmp[ff] = sum(Ytmp)
+        }# end loop over ftmps
+        
+         
+         
+         Ydiff = abs(Ytot_tmp - Target) # difference
+         Index = which(Ydiff==min(Ydiff))
+         ftmp = ftmps[Index[1]]
+  
+      #  print(ftmps)
+      #  print(Target)
+      #  print(Ytot_tmp)
+      #  print(Ydiff)
+      #  print(f)
+      #  print(ftmp)
+        
+      } # end routine for figuring out F
+      
+    }
+    Fvec = ftmp * scaled_CPUE/mean(scaled_CPUE) # Fvec is fishing rate over space
   }
 
+  if (t > 198){
+   # print(sum(Fvec))
+    }
   Fvec_HR <- HR %*% Fvec
   Fvec_T[,t] <- Fvec
   
@@ -211,13 +283,40 @@ for (t in 2:Tmax) {
     # larval dispersal  
     S[,t] <- D %*% Nt1[1, ]
     
+    
     # density-dependent recruitment
-    Nt[1,,] <- a * S[, t] / (1 + (a / b) * S[, t])  
+    R <- a * S[, t] / (1 + (a / b) * S[, t])  
+    
+    # Recruitment deviation
+    # For lingcod sigma_r = 0.6, for dover sole sigma_r = 0.35
+    Rtmp = mean(R)
+    # rescale to make sure the lognormal transformation works
+    Rfact = 0
+    #print(c(Rtmp,Rfact))
+    if (Rtmp<=1){
+      Rfact = abs(floor(log(Rtmp))) # exponentiation factor to get it above 1
+    }else{
+      Rfact=0}
+    Rtmp = Rtmp * (exp(Rfact))
+        
+    RecDev = rnorm(n=1,mean=0,sd=log(Rtmp)*params$sigma_r) # lognormal deviation with a specified CV
+  #  RecDev = RecDev *(exp(-1*Rfact)) # back-transformation
+  
+    #print(c(Rtmp,Rfact))
+   # print(c(Rtmp<=1,log(Rtmp),RecDev,Rfact))
+    R = exp(log(R * exp(Rfact)) + RecDev) # exponentiate to put lognormal deviations into arithmetic scale
+    
+    R = R * exp(-Rfact) # back-transformation
+    
+    R[R<0] = 0 # this shouldn't be a problem but just in case
+    
+    # Recruits enter the population
+    Nt[1,,] <- R
     
     # Save the current N values for the i-th hab_mean iteration
    
-    print(paste("Y_values at time", t, ":", sum(Y_values[,t])))
-    print(paste("H_values at time", t, ":", sum(H_values[,t])))
+  #  print(paste("Y_values at time", t, ":", sum(Y_values[,t])))
+  #  print(paste("H_values at time", t, ":", sum(H_values[,t])))
     for (x in 1:length(hab_means)) {
       if (H_values[x, t]==0) {
         CPUE[x, t]=0
@@ -229,16 +328,16 @@ for (t in 2:Tmax) {
 
 
 
-     }
+     } # end time loop
 
   end_time <- Sys.time()
   elapsed_time <- end_time - start_time
   print(elapsed_time)
   
     if (Option == "B") {
-      Y_values[brookings_windfarm == 1 | p_coos_windfarm == 1,200:220]<-0
+  #    Y_values[brookings_windfarm == 1 | p_coos_windfarm == 1,200:220]<-0
     }else if (Option == "C") {
-      Y_values[p_brookings_windfarm == 1 | p_coos_windfarm == 1,200:220]<-0
+  #    Y_values[p_brookings_windfarm == 1 | p_coos_windfarm == 1,200:220]<-0
     }else{
       
     }
@@ -289,66 +388,97 @@ for (t in 2:Tmax) {
   }
   #######
   
-  
-  
+
   if (Option == "B") {
     for (tim in 181:220) {
-      biomassInside[tim-180] <-sum(B[brookings_windfarm == 1 | p_coos_windfarm == 1,tim])
-      biomassOutside[tim-180] <-sum(B[brookings_windfarm == 0 & p_coos_windfarm == 0,tim])
-      YInside2[tim-180] <-sum(Y_values2[brookings_windfarm == 1 | p_coos_windfarm == 1,tim])
-      YOutside2[tim-180] <-sum(Y_values2[brookings_windfarm == 0 & p_coos_windfarm == 0,tim])
+      
+      # Old method: assumings OWF addresses are logical 0,1. 
+     # biomassInside[tim-180] <-sum(B[brookings_windfarm == 1 | p_coos_windfarm == 1,tim])
+      #biomassOutside[tim-180] <-sum(B[brookings_windfarm == 0 & p_coos_windfarm == 0,tim])
+      #YInside2[tim-180] <-sum(Y_values2[brookings_windfarm == 1 | p_coos_windfarm == 1,tim])
+      #YOutside2[tim-180] <-sum(Y_values2[brookings_windfarm == 0 & p_coos_windfarm == 0,tim])
+      #SumB[tim-180] <- mean(B[,tim])
+      #NEED TO DEFINE NtNew as a [x,t] Matrix
+      #NtInside[tim-180] <- sum(NtNew[brookings_windfarm == 1 | p_coos_windfarm == 1,tim])
+      #FvecHRInside[tim-180] <-mean(Fvec_HR_T[brookings_windfarm == 1 | p_coos_windfarm == 1,tim])
+      #FvecHROutside[tim-180] <-mean(Fvec_HR_T[brookings_windfarm == 0 & p_coos_windfarm == 0,tim])
+      #SumFvecHR[tim-180] <- mean(Fvec_HR_T[,tim])
+      #FvecInside[tim-180] <-sum(Fvec_T[brookings_windfarm == 1 | p_coos_windfarm == 1,tim])
+      #FvecOutside[tim-180] <-sum(Fvec_T[brookings_windfarm == 0 & p_coos_windfarm == 0,tim])
+      #SumFvec[tim-180] <- sum(Fvec_T[,tim])
+      #YInside[tim-180] <-sum(Y_values[brookings_windfarm == 1 | p_coos_windfarm == 1,tim])
+      #YOutside[tim-180] <-sum(Y_values[brookings_windfarm == 0 & p_coos_windfarm == 0,tim])
+      #SumY[tim-180] <- sum(Y_values[,tim])
+      #HInside[tim-180] <-mean(H_values[brookings_windfarm == 1 | p_coos_windfarm == 1,tim])
+      #HOutside[tim-180] <-mean(H_values[brookings_windfarm == 0 & p_coos_windfarm == 0,tim])
+      #SumH[tim-180] <- mean(H_values[,tim])
+      #CPUEInside[tim-180] <-mean(CPUE[brookings_windfarm == 1 | p_coos_windfarm == 1,tim])
+      #CPUEOutside[tim-180] <-mean(CPUE[brookings_windfarm == 0 & p_coos_windfarm == 0,tim])
+      #WILL SHOULD THE CPUE ALSO BE SUM? FOR CALC LANDINGS IN OWF
+      #SumCPUE[tim-180] <- mean(CPUE[,tim])
+      
+      In = brookings_windfarm + p_coos_windfarm
+      Out = 1 - In
+      # New method: assumings OWF addresses are fractional
+      biomassInside[tim-180] <-sum(B[,tim]*In)
+      biomassOutside[tim-180] <-sum(B[,tim]*Out)
+      YInside2[tim-180] <-sum(Y_values2[,tim]*In)
+      YOutside2[tim-180] <-sum(Y_values2[,tim]*Out)
       SumB[tim-180] <- mean(B[,tim])
       #NEED TO DEFINE NtNew as a [x,t] Matrix
-      NtInside[tim-180] <- sum(NtNew[brookings_windfarm == 1 | p_coos_windfarm == 1,tim])
-      FvecHRInside[tim-180] <-mean(Fvec_HR_T[brookings_windfarm == 1 | p_coos_windfarm == 1,tim])
-      FvecHROutside[tim-180] <-mean(Fvec_HR_T[brookings_windfarm == 0 & p_coos_windfarm == 0,tim])
+      NtInside[tim-180] <- sum(NtNew[,tim]*In)
+      FvecHRInside[tim-180] <-mean(Fvec_HR_T[,tim]*In)
+      FvecHROutside[tim-180] <-mean(Fvec_HR_T[,tim]*Out)
       SumFvecHR[tim-180] <- mean(Fvec_HR_T[,tim])
-      FvecInside[tim-180] <-sum(Fvec_T[brookings_windfarm == 1 | p_coos_windfarm == 1,tim])
-      FvecOutside[tim-180] <-sum(Fvec_T[brookings_windfarm == 0 & p_coos_windfarm == 0,tim])
+      FvecInside[tim-180] <-sum(Fvec_T[,tim]*In)
+      FvecOutside[tim-180] <-sum(Fvec_T[,tim]*Out)
       SumFvec[tim-180] <- sum(Fvec_T[,tim])
-      YInside[tim-180] <-sum(Y_values[brookings_windfarm == 1 | p_coos_windfarm == 1,tim])
-      YOutside[tim-180] <-sum(Y_values[brookings_windfarm == 0 & p_coos_windfarm == 0,tim])
+      YInside[tim-180] <-sum(Y_values[,tim]*In)
+      YOutside[tim-180] <-sum(Y_values[,tim]*Out)
       SumY[tim-180] <- sum(Y_values[,tim])
-      HInside[tim-180] <-mean(H_values[brookings_windfarm == 1 | p_coos_windfarm == 1,tim])
-      HOutside[tim-180] <-mean(H_values[brookings_windfarm == 0 & p_coos_windfarm == 0,tim])
+      HInside[tim-180] <-mean(H_values[,tim]*In)
+      HOutside[tim-180] <-mean(H_values[,tim]*Out)
       SumH[tim-180] <- mean(H_values[,tim])
-      CPUEInside[tim-180] <-mean(CPUE[brookings_windfarm == 1 | p_coos_windfarm == 1,tim])
-      CPUEOutside[tim-180] <-mean(CPUE[brookings_windfarm == 0 & p_coos_windfarm == 0,tim])
+      CPUEInside[tim-180] <-mean(CPUE[,tim]*In)
+      CPUEOutside[tim-180] <-mean(CPUE[,tim]*Out)
       #WILL SHOULD THE CPUE ALSO BE SUM? FOR CALC LANDINGS IN OWF
       SumCPUE[tim-180] <- mean(CPUE[,tim])
     }
     
     for (tim in 199) {
-      YInsideBeforeWindFarm[tim] <-sum(Y_values[brookings_windfarm == 1 | p_coos_windfarm == 1,tim])
+      YInsideBeforeWindFarm[tim] <-sum(Y_values[,tim]*In)
     }
   } else if (Option == "C") {
     for (tim in 181:220) {
       
-      biomassInside[tim-180] <-sum(B[p_brookings_windfarm == 1 | p_coos_windfarm == 1,tim])
-      biomassOutside[tim-180] <-sum(B[p_brookings_windfarm == 0 & p_coos_windfarm == 0,tim])
-      SumB[tim-180] <- sum(B[,tim])
-      YInside2[tim-180] <-sum(Y_values2[p_brookings_windfarm == 1 | p_coos_windfarm == 1,tim])
-      YOutside2[tim-180] <-sum(Y_values2[p_brookings_windfarm == 0 & p_coos_windfarm == 0,tim])
+      In = p_brookings_windfarm + p_coos_windfarm
+      Out = 1 - In
       
-      NtInside[tim-180] <- sum(NtNew[p_brookings_windfarm == 1 | p_coos_windfarm == 1,tim])
-      FvecHRInside[tim-180] <-mean(Fvec_HR_T[p_brookings_windfarm == 1 | p_coos_windfarm == 1,tim])
-      FvecHROutside[tim-180] <-mean(Fvec_HR_T[p_brookings_windfarm == 0 & p_coos_windfarm == 0,tim])
+      biomassInside[tim-180] <-sum(B[,tim]*In)
+      biomassOutside[tim-180] <-sum(B[,tim]*Out)
+      SumB[tim-180] <- sum(B[,tim])
+      YInside2[tim-180] <-sum(Y_values2[,tim]*In)
+      YOutside2[tim-180] <-sum(Y_values2[,tim]*Out)
+      
+      NtInside[tim-180] <- sum(NtNew[,tim]*In)
+      FvecHRInside[tim-180] <-mean(Fvec_HR_T[,tim]*In)
+      FvecHROutside[tim-180] <-mean(Fvec_HR_T[,tim]*Out)
       SumFvecHR[tim-180] <- sum(Fvec_HR_T[,tim])
-       FvecInside[tim-180] <-mean(Fvec_T[p_brookings_windfarm == 1 | p_coos_windfarm == 1,tim])
-       FvecOutside[tim-180] <-mean(Fvec_T[p_brookings_windfarm == 0 & p_coos_windfarm == 0,tim])
+       FvecInside[tim-180] <-mean(Fvec_T[,tim]*In)
+       FvecOutside[tim-180] <-mean(Fvec_T[,tim]*Out)
        SumFvec[tim-180] <- sum(Fvec_T[,tim])
-      YInside[tim-180] <-sum(Y_values[p_brookings_windfarm == 1 | p_coos_windfarm == 1,tim])
-      YOutside[tim-180] <-sum(Y_values[p_brookings_windfarm == 0 & p_coos_windfarm == 0,tim])
+      YInside[tim-180] <-sum(Y_values[,tim]*In)
+      YOutside[tim-180] <-sum(Y_values[,tim]*Out)
       SumY[tim-180] <- sum(Y_values[,tim])
-      HInside[tim-180] <-mean(H_values[p_brookings_windfarm == 1 | p_coos_windfarm == 1,tim])
-      HOutside[tim-180] <-mean(H_values[p_brookings_windfarm == 0 & p_coos_windfarm == 0,tim])
+      HInside[tim-180] <-mean(H_values[,tim]*In)
+      HOutside[tim-180] <-mean(H_values[,tim]*Out)
       SumH[tim-180] <- sum(H_values[,tim])
-      CPUEInside[tim-180] <-mean(CPUE[p_brookings_windfarm == 1 | p_coos_windfarm == 1,tim])
-      CPUEOutside[tim-180] <-mean(CPUE[p_brookings_windfarm == 0 & p_coos_windfarm == 0,tim])
+      CPUEInside[tim-180] <-mean(CPUE[,tim]*In)
+      CPUEOutside[tim-180] <-mean(CPUE[,tim]*Out)
       SumCPUE[tim-180] <- sum(CPUE[,tim])
     }
     for (tim in 199) {
-      YInsideBeforeWindFarm[tim] <-sum(Y_values[p_brookings_windfarm == 1 | p_coos_windfarm == 1,tim])
+      YInsideBeforeWindFarm[tim] <-sum(Y_values[,tim]*In)
     }
     } else {
     for (tim in 181:220) {

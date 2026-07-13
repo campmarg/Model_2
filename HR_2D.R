@@ -4,16 +4,16 @@ home_range_2D <- function(distances,Mu,Sigma){
   
   # Assume that distances is a matrix of the pairwise distances between the center of each patch
   
-  # Each patch is 10km^2
+  # Each patch is 10 x 10 km
   Patch = 10
   # Assume we subdivide into smaller units that are the size of a homerange (defined as the 95% area)
   HR_area = pi * Sigma^2
   NumHR = Patch^2/HR_area # total number of (nonoverlapping) HRs in the patch
-  NumEdge = sqrt(NumHR) # number of homeranges that are along one edge of the patch
+  NumEdge = min( sqrt(NumHR), Patch/(2*Sigma)) # number of homeranges that are along one edge of the patch
   
-  Overlap = 0.5*HR_area*NumEdge # how much homerange area would spill into a neighboring patch
+  Overlap = (0.5*HR_area*NumEdge)/(Patch^2) # how much homerange area would spill into a neighboring patch
   
-  Interior = 1-Overlap*4 # How much area remains in the central patch
+  Interior = (Patch^2-Overlap*4)/(Patch^2) # How much area remains in the central patch
   
   HR = distances*0
   

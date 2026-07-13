@@ -14,6 +14,8 @@ tparam <- function() {
   #new f surviving = e^-f
   #-ln(1-exploitation rate)=f
   f <- -log(1 - 0.024)
+  sigma_r <- 0.6 #new 4.25.26
+  steepness <- 0.8 # Table 17 of the assessment
   
   von_bertalanffy <- function(Ages, L_inf, k, t0) {
     L_t <- L_inf * (1 - exp(-k * (Ages - t0)))
@@ -66,6 +68,8 @@ tparam <- function() {
     b2 = b2,
     selectivity_t = selectivity_t,
     Af_t = Af_t,
-    LEP = LEP
+    LEP = LEP,
+    sigma_r = sigma_r,
+    steepness = steepness
   ))
 }

@@ -10,14 +10,14 @@ library(dplyr)
 library(cowplot)
 
 #Data Read In
-trawl_f <- read_excel("~/Desktop/white_lab/Trawl 05-22 Fixed.xlsx")
+trawl_f <- read_excel("Data/Trawl 05-22 Fixed.xlsx")
 trawl_f <- trawl_f[trawl_f$YEAR %in% c("2012", "2013", "2014", "2015", "2016", "2017", "2018", "2019", "2020", "2021", "2022"), ]
-fixed_gear_f <- read_excel("~/Desktop/white_lab/FG 05-22 Fixed.xlsx")
+fixed_gear_f <- read_excel("Data/FG 05-22 Fixed.xlsx")
 fixed_gear_f <- fixed_gear_f[fixed_gear_f$LogYear %in% c("2012", "2013", "2014", "2015", "2016", "2017", "2018", "2019", "2020", "2021", "2022"), ]
-OR_CallAreas <- read_excel("~/Desktop/white_lab/OR_CallAreas_Waypoints_April_2022.xls")
-OR_WEA_parcelled <- read_excel("~/Desktop/white_lab/OWF_Parcelled.xlsx")
+OR_CallAreas <- read_excel("Data/OR_CallAreas_Waypoints_April_2022.xls")
+OR_WEA_parcelled <- read_excel("Data/OWF_Parcelled.xlsx")
 
-ORshapefile <- st_read("~/Desktop/white_lab/or_coastline_proj.shp")
+#ORshapefile <- st_read("Data/or_coastline_proj.shp")
 
 coast <- ne_states(country='United States of America',returnclass = 'sf') %>%
   filter(name %in% c('Oregon','Washington','California','Nevada')) %>% 
@@ -29,7 +29,7 @@ coast <- ne_states(country='United States of America',returnclass = 'sf') %>%
 # col 3 - "est": the mean model-estimated density in log space (units of ln(kg/km2))
 # col 4 - cpue_kg_km2: the exponentiated version of est (units of kg/km2). This is what I've mapped below
 #col 5 - species name
-SDM_data <- readRDS("~/Desktop/white_lab/Model_2/Model_2/OSU_offshorewind_5_species.rds")
+SDM_data <- readRDS("Data/OSU_offshorewind_5_species.rds")
 SDM_data$Up_Lat_km <- SDM_data$lat * 111
 SDM_data$Up_Lng_km <- SDM_data$lon #make empty column, gets overwritten next line
 for (Row in 1:nrow(SDM_data)) {

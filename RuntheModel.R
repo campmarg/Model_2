@@ -1,104 +1,32 @@
 #RuntheModel.R
 
-#RUN dataReadIn.R FIRST!
-#then
-#RUN spatial_model2.R package + coastline_function.R package + HR_2D.R package
-# leslie_matrix.R package 
-#then
-#make sure have species you want in the tparam + the coastline
-#RUNNING FOR LCOD (only thru % chane plot) 
+RunTheModel <- function(nruns,Tmax,X,hab_means,HR,f,a,params,trips,D,Option,Option2,windfarms){
+#Run the model 
+#nruns = 3
+  
+p_coos_windfarm = windfarms[,1]
+p_brookings_windfarm = windfarms[,2]
+brookings_windfarm = windfarms[,3]
+  
+# pre-allocate variables
+biomassInside <- matrix(NA,nrow=40,ncol=nruns)
+biomassOutside <- matrix(NA,nrow=40,ncol=nruns)
+FvecHRInside <- matrix(NA,nrow=40,ncol=nruns)
+FvecHROutside <- matrix(NA,nrow=40,ncol=nruns)
+FvecInside <- matrix(NA,nrow=40,ncol=nruns)
+FvecOutside <- matrix(NA,nrow=40,ncol=nruns)
+CPUEInside <- matrix(NA,nrow=40,ncol=nruns)
+CPUEOutside <- matrix(NA,nrow=40,ncol=nruns)
+HInside <- matrix(NA,nrow=40,ncol=nruns)
+HOutside <- matrix(NA,nrow=40,ncol=nruns)
+YInside <- matrix(NA,nrow=40,ncol=nruns)
+YOutside <- matrix(NA,nrow=40,ncol=nruns)
+YOutside2 <- matrix(NA,nrow=40,ncol=nruns)
+YInside2 <- matrix(NA,nrow=40,ncol=nruns)
+YInsideBeforeWindFarm <- matrix(NA,nrow=200,ncol=nruns)
 
-library(ggplot2)
-library(devtools)
-#install_local("Model2package",force=TRUE) 
-#library(Model2package)
-library(matlib)
-library(dplyr)
-library(gridExtra)
-library(RColorBrewer)
-library(mvtnorm) # Load the mvtnorm package for multivariate normal functions
-library(sf)
-library(sp)
-#library(viridis)
-#library(MASS)
-
-##### Run the Model #####
-Mu = 0
-LEP_target = 0.5 # desired level of LEP in fished area (50% would be the usual groundfish target) yes 0.5 should be the SPR target (for our purposes LEP = SPR)
-coastline <- coastline_function()
-#logbookCPUE <- coastline$logbookCPUE
-X <- coastline$X
-X_split <- strsplit(X, ",")
-X_numeric <- matrix(as.numeric(unlist(X_split)), ncol = 2, byrow = TRUE)
-
-Z <- coastline$Z
-Z_split <- strsplit(Z, ",")
-Z_numeric <- matrix(as.numeric(unlist(Z_split)), ncol = 2, byrow = TRUE)
-
-hab_means <- coastline$hab_means
-fish <- coastline$fish
-trips <- fish$trips
-brookings_windfarm <- fish$within_brookings
-coos_windfarm <- fish$within_coos
-p_brookings_windfarm <- fish$p_within_brookings
-p_coos_windfarm <- fish$p_within_coos
-Latitude <- as.numeric(sapply(strsplit(X, ","), "[", 1))
-Longitude <- as.numeric(sapply(strsplit(X, ","), "[", 2))
-
-LAAT <- as.numeric(sapply(strsplit(Z, ","), "[", 1))
-LOON <- as.numeric(sapply(strsplit(Z, ","), "[", 2))
-LOON <- ifelse(LOON >= 0, -LOON, LOON)
-
-
-coordinates_matrix <- cbind(Latitude, Longitude)
-Sigma <- coastline$Sigma
-
-#Parameters to simulate recruit distribution inside an OWF
-T <- 200;
-Tmax = T+20
-R <- matrix(1, nrow = length(X), ncol = T)
-params <- tparam()
-f <- params$f 
-#-ln(1-exploitation rate)=f
-a <- 1 / (0.15*params$LEP)
-#take value of f from each stock assessment is for each species
-
-#hab_means <- quantile(1:length(X),probs = c(0.05,0.3,0.55))
-#scaled CPUE = habitat -> coastline function
-
-percent = 0
-SPR = 0.5
-
-# Create the dispersal matrix D
-D <- matrix(1/length(hab_means), nrow = length(hab_means), ncol = length(hab_means))
-
-HR_Storage <- matrix(data=0,nrow = dim(coordinates_matrix)[1], ncol = dim(coordinates_matrix)[1])
-# HR_Storage [1,] is the distribution from the first coordinate to all other points
-# HR_Storage [2,] is the distribution from the second coordinate to all other points
-
-for (point in 1:dim(coordinates_matrix)[1]) {
-  distances <- spDistsN1(coordinates_matrix,coordinates_matrix[point,] , longlat = FALSE)
-  HR_Storage[point,] <- distances
-}
-HR <- home_range_2D(distances, Mu, Sigma)
-HR = home_range_2D(Mu=0, Sigma=Sigma, distances=HR_Storage) # homerange movement
-#distance at each location - #diaganol of ones
-#HR = diag(nrow = length(distances))
-
-#Leslie Matrix
-#m_spec <- leslie_matrix(params, Fvec_HR = Fvec_HR) #ignore - made in spatial model code 
-#m_spec <- leslie_matrix(params, HR = HR)
-Amax=getElement(params, 'Amax')
-M=getElement(params, 'M')
-LEP=getElement(params, 'LEP')
-
-#Option "B" - p coos & brookings SCENARIO 1
-#Option "C" - p coos & p brookings SCENARIO 2
-
-Option <- "B"
-
-#Run the model once 
-Result = spatial_model2(Tmax, X, hab_means, HR, f, a, params, trips, D, Option)
+for (i in 1:nruns){
+Result = spatial_model2(Tmax, X, hab_means, HR, f, a, params, trips, D, Option,Option2)
 
  Result$biomassInside
  Result$biomassOutside
@@ -114,56 +42,88 @@ Result = spatial_model2(Tmax, X, hab_means, HR, f, a, params, trips, D, Option)
  Result$YInside/Result$SumY
 
 # Extract the relevant variables
-biomassInside <- Result$biomassInside[1:40]
-biomassOutside <- Result$biomassOutside[1:40]
-FvecHRInside <- Result$FvecHRInside[1:40]
-FvecHROutside <- Result$FvecHROutside[1:40]
-FvecInside <- Result$FvecInside[1:40]
-FvecOutside <- Result$FvecOutside[1:40]
-CPUEInside <- Result$CPUEInside[1:40]
-CPUEOutside <- Result$CPUEOutside[1:40]
-HInside <- Result$HInside[1:40]
-HOutside <- Result$HOutside[1:40]
-YInside <- Result$YInside[1:40]
-YOutside <- Result$YOutside[1:40]
-YOutside2 <- Result$YOutside2[1:40]
-YInside2 <- Result$YInside2[1:40]
+biomassInside[,i] <- Result$biomassInside[1:40]
+biomassOutside[,i]  <- Result$biomassOutside[1:40]
+FvecHRInside[,i]  <- Result$FvecHRInside[1:40]
+FvecHROutside[,i]  <- Result$FvecHROutside[1:40]
+FvecInside[,i]  <- Result$FvecInside[1:40]
+FvecOutside[,i]  <- Result$FvecOutside[1:40]
+CPUEInside[,i]  <- Result$CPUEInside[1:40]
+CPUEOutside[,i]  <- Result$CPUEOutside[1:40]
+HInside[,i]  <- Result$HInside[1:40]
+HOutside[,i]  <- Result$HOutside[1:40]
+YInside[,i]  <- Result$YInside[1:40]
+YOutside[,i]  <- Result$YOutside[1:40]
+YOutside2[,i]  <- Result$YOutside2[1:40]
+YInside2[,i]  <- Result$YInside2[1:40]
+YInsideBeforeWindFarm[,i] <-Result$YInsideBeforeWindFarm
+
+}
 
 #### NEW CODE FOR BARCHART
 # === SETUP: Compute metrics ===
+# Updated to reflect stochastic runs
 
 # Habitat in OWF (as percentages)
-habin_owf_B <- sum(p_coos_windfarm + brookings_windfarm == 1) / length(p_coos_windfarm) * 100
+#habin_owf_B <- sum(p_coos_windfarm + brookings_windfarm == 1) / length(p_coos_windfarm) * 100
 #habin_owf_C <- sum(p_coos_windfarm + p_brookings_windfarm == 1) / length(p_coos_windfarm) * 100
+habin_owf_B <- sum(p_coos_windfarm + brookings_windfarm) / length(p_coos_windfarm) * 100
+habin_owf_C <- sum(p_coos_windfarm + p_brookings_windfarm) / length(p_coos_windfarm) * 100
 
-#CHANGE BELOW
+
 # Choose which scenario to plot
-habin_owf <- habin_owf_B  # MAKE SURE YOU RUN WHATEVER OPTION YOU ARE DOING
-#habin_owf <- habin_owf_C  
+if (Option == 'B'){
+habin_owf <- habin_owf_B}else{
+habin_owf <- habin_owf_C}
 
 # Landings in OWF -> change this to YIELD
-net_change_CPUEInside <- (mean(Result$YInside[21:40]) - mean(Result$YInside[1:20])) / mean(Result$YInside[1:20]) * 100
-net_change_CPUEOutside <- (mean(Result$YOutside[21:40]) - mean(Result$YOutside[1:20])) / mean(Result$YOutside[1:20]) * 100
+#net_change_CPUEInside <- (mean(Result$YInside[21:40]) - mean(Result$YInside[1:20])) / mean(Result$YInside[1:20]) * 100
+#net_change_CPUEOutside <- (mean(Result$YOutside[21:40]) - mean(Result$YOutside[1:20])) / mean(Result$YOutside[1:20]) * 100
+#landings_OWF <- net_change_CPUEOutside / (net_change_CPUEInside) *-1 #IS THIS RIGHT WILL
+if (nruns == 1){
+  net_change_CPUEInside <- (mean(YInside[21:40,]) - mean(YInside[1:20,])) / mean(YInside[1:20,]) * 100
+  net_change_CPUEOutside <- (mean(YOutside[21:40,]) - mean(YOutside[1:20,])) / mean(YOutside[1:20,]) * 100 
+}else{
+net_change_CPUEInside <- (colMeans(YInside[21:40,]) - colMeans(YInside[1:20,])) / colMeans(YInside[1:20,]) * 100
+net_change_CPUEOutside <- (colMeans(YOutside[21:40,]) - colMeans(YOutside[1:20,])) / colMeans(YOutside[1:20,]) * 100
+}
 landings_OWF <- net_change_CPUEOutside / (net_change_CPUEInside) *-1 #IS THIS RIGHT WILL
 
+# CHECK ON WHY THERE IS NO YIELD INSIDE ... shouldn't there be some bc homerange?
+
 # Biomass
-totalBiomass <- Result$biomassInside + Result$biomassOutside
-percent_change_in_totalbio <- (mean(totalBiomass[21:40]) - mean(totalBiomass[1:20])) / mean(totalBiomass[1:20]) * 100
+totalBiomass <- biomassInside + biomassOutside
+if (nruns == 1){
+  percent_change_in_totalbio <- (mean(totalBiomass[21:40,]) - mean(totalBiomass[1:20,])) / mean(totalBiomass[1:20,]) * 100
+}else{
+percent_change_in_totalbio <- (colMeans(totalBiomass[21:40,]) - colMeans(totalBiomass[1:20,])) / colMeans(totalBiomass[1:20,]) * 100
+}
 
 # Yield
-totalyield <- Result$YInside + Result$YOutside
-percent_change_in_totaly <- (mean(totalyield[21:40]) - mean(totalyield[1:20])) / mean(totalyield[1:20]) * 100
+totalyield <- YInside + YOutside
+if (nruns == 1){
+  percent_change_in_totaly <- (mean(totalyield[21:40,]) - mean(totalyield[1:20,])) / mean(totalyield[1:20,]) * 100
+}else{
+percent_change_in_totaly <- (colMeans(totalyield[21:40,]) - colMeans(totalyield[1:20,])) / colMeans(totalyield[1:20,]) * 100
+}
 
 #Yield in OSW Area Before OSW
-YieldinOSWbeforeOSW <- ((Result$YInsideBeforeWindFarm[199]) / totalyield[19]) * 100 #NOW TAKING VALUE 199 - reached stable state
+YieldinOSWbeforeOSW <- ((YInsideBeforeWindFarm[199,]) / totalyield[19,]) * 100 #NOW TAKING VALUE 199 - reached stable state
 
 # Spillover
 #new calc
-larval_spillover <- (biomassInside[21:40]/(biomassInside[21:40] + biomassOutside[21:40])) #* 100
-mean_larval_spillover <- mean(larval_spillover)*100
+larval_spillover <- (biomassInside[21:40,]/(biomassInside[21:40,] + biomassOutside[21:40,])) #* 100
+if (nruns==1){
+  mean_larval_spillover <- mean(larval_spillover)*100  
+}else{
+mean_larval_spillover <- colMeans(larval_spillover)*100}
+
 #new calc
-adult_spillover <- (YInside2[21:40])/(YInside2[21:40] + YOutside2[21:40])
-mean_adult_spillover <- mean(adult_spillover) *100
+adult_spillover <- (YInside2[21:40,])/(YInside2[21:40,] + YOutside2[21:40,])
+if (nruns ==1){
+  mean_adult_spillover <- mean(adult_spillover) *100  
+}else{
+mean_adult_spillover <- colMeans(adult_spillover) *100}
 
 #old calc
 #larval_spillover <- (mean(Result$MatureInside[21:40])) * 100
@@ -181,32 +141,50 @@ metrics <- c(
   "Change in Total Yield (%)"
 )
 #plot before then after
-values <- c(
-  YieldinOSWbeforeOSW,
+mean.values <- c(
+  mean(YieldinOSWbeforeOSW),
   habin_owf,
-  percent_change_in_totalbio,
-  mean_larval_spillover,
-  mean_adult_spillover,
-  percent_change_in_totaly
+  mean(percent_change_in_totalbio),
+  mean(mean_larval_spillover),
+  mean(mean_adult_spillover),
+  mean(percent_change_in_totaly)
+)
+
+sd.values <- c(
+  sd(YieldinOSWbeforeOSW),
+  0,
+  sd(percent_change_in_totalbio),
+  sd(mean_larval_spillover),
+  sd(mean_adult_spillover),
+  sd(percent_change_in_totaly)
 )
 
 plot_data <- data.frame(
   Metric = factor(metrics, levels = rev(metrics)),  # Flip order for plotting
-  Value = values,
-  Color = ifelse(values >= 0, "blue", "blue")
+  Mean.Value = mean.values,
+  SD.Value = sd.values,
+  Color = ifelse(mean.values >= 0, "blue", "blue")
 )
 
 # BARCHART
+# Yaxis limits
+if (nruns == 1){
+  YLims = c(-3.5,3.5)
+} else {
+  YLims = c(-20,20)
+}
+
 setEPS()
-postscript("LCOD Full 12.05.100.eps")
-ggplot(plot_data, aes(x = Metric, y = Value, fill = Color)) +
+postscript(Barchart.Filename)
+Gname = ggplot(plot_data, aes(x = Metric, y = Mean.Value, fill = Color)) +
   geom_bar(stat = "identity") +
   scale_fill_identity() +
+  geom_errorbar(aes(ymin=(Mean.Value-SD.Value),ymax=(Mean.Value+SD.Value))) +
   coord_flip() +
   labs(
     x = NULL,
     y = "Percent Change",
-    title = "LCOD - Full Scenario"
+    title = Barchart.Title
   ) +
   theme_minimal() +
   theme(
@@ -214,7 +192,8 @@ ggplot(plot_data, aes(x = Metric, y = Value, fill = Color)) +
     plot.title = element_text(size = 14, face = "bold"),
     legend.position = "none"
   ) +
-  scale_y_continuous(limits = c(-10, 10))
+  scale_y_continuous(limits = YLims)
+print(Gname)
 dev.off()
 
 ####### Line Graph ######
@@ -223,34 +202,105 @@ dev.off()
 # Biomasstotal <- Result$biomassInside +  Result$biomassOutside
 # bio_relative_values <- Biomasstotal / mean(Biomasstotal[1:19])
 # relative_result <- data.frame(x = 1:length(bio_relative_values), relative_value = bio_relative_values)
-bio_relative_values_inside <- Result$biomassInside / mean(Result$biomassInside[1:19])
-bio_relative_values_outside <- Result$biomassOutside / mean(Result$biomassOutside[1:19])
+
+
+if (nruns==1){
+  # vector of biomass relative to initial, over time
+  
+  bio_relative_values_inside <- biomassInside / mean(biomassInside[1:19,]) # divisor is the mean of the pre-OWF time
+  bio_relative_values_outside <- biomassOutside / mean(biomassOutside[1:19,])
+  
 inside_relative_result <- data.frame(x = 1:length(bio_relative_values_inside), relative_value = bio_relative_values_inside)
 outside_relative_result <- data.frame(x = 1:length(bio_relative_values_outside), relative_value = bio_relative_values_outside)
+} else { 
+  
+  bio_relative_values_inside <- biomassInside / colMeans(biomassInside[1:19,]) # divisor is the mean of the pre-OWF time
+  bio_relative_values_outside <- biomassOutside / colMeans(biomassOutside[1:19,])
+  
+  inside_relative_result <- data.frame(x = 1:length(bio_relative_values_inside), relative_value = rowMeans(bio_relative_values_inside), sd = apply(X=bio_relative_values_inside,MARGIN=1,FUN=sd)) # take the mean over the replicates
+  outside_relative_result <- data.frame(x = 1:length(bio_relative_values_outside), relative_value = rowMeans(bio_relative_values_outside), sd = apply(X=bio_relative_values_outside,MARGIN=1,FUN=sd)) 
+  }
 
 # #Y_relative_values <- Result$SumY / Result$SumY[19]
 # #Y_relative_result <- data.frame(x = 1:length(Y_relative_values), relative_value = Y_relative_values)
 # Ytotal <- Result$YInside +  Result$YOutside
 # y_relative_values <- Ytotal / mean(Ytotal[1:19])
 # y_relative_result <- data.frame(x = 1:length(y_relative_values), relative_value = y_relative_values)
-inside_y_relative_values <- Result$YInside / mean(Result$YInside[1:19])
-outside_y_relative_values <- Result$YOutside / mean(Result$YOutside[1:19])
-inside_y_relative_result <- data.frame(x = 1:length(inside_y_relative_values), relative_value = inside_y_relative_values)
-outside_y_relative_result <- data.frame(x = 1:length(outside_y_relative_values), relative_value = outside_y_relative_values)
 
+
+if (nruns==1){
+  
+#  inside_y_relative_values <- YInside / mean(YInside[1:19,],)
+#  outside_y_relative_values <- YOutside / mean(YOutside[1:19,],)
+  
+#inside_y_relative_result <- data.frame(x = 1:length(inside_y_relative_values), relative_value = inside_y_relative_values)
+#outside_y_relative_result <- data.frame(x = 1:length(outside_y_relative_values), relative_value = outside_y_relative_values)
+  
+  y_relative_values = totalyield/mean(totalyield[1:19,])
+  y_relative_result = data.frame(x = 1:length(y_relative_values),relative_value = y_relative_values)
+  
+}else{
+  
+ # inside_y_relative_values <- YInside / colMeans(YInside[1:19,],)
+ # outside_y_relative_values <- YOutside / colMeans(YOutside[1:19,],)
+  
+ # inside_y_relative_result <- data.frame(x = 1:length(inside_y_relative_values), relative_value = rowMeans(inside_y_relative_values),sd = apply(X=inside_y_relative_values,MARGIN=1,FUN=sd))
+ # outside_y_relative_result <- data.frame(x = 1:length(outside_y_relative_values), relative_value = rowMeans(outside_y_relative_values),sd = apply(X=outside_y_relative_values,MARGIN=1,FUN=sd))
+  
+  y_relative_values = totalyield/colMeans(totalyield[1:19,])
+  y_relative_result = data.frame(x = 1:length(y_relative_values),relative_value = rowMeans(y_relative_values), sd = apply(X=y_relative_values,MARGIN=1,FUN=sd))
+  
+  
+}
+
+if (nruns == 1){
+ # print(s)
+  if (s == 1){
+  YLims = c(0.975,1.025) #lcod
+  }else{
+    YLims = c(0.8,1.2) # dsole
+  }
+  
 setEPS()
-postscript("dverreduced.eps")
-ggplot() +
+postscript(Line.Graph.Name)
+Gname = ggplot() +
   geom_line(data = inside_relative_result[15:40,], aes(x = x + 180, y = relative_value, color = "Biomass Inside"), size = 1.5, alpha = 1) + # Blue
   geom_line(data = outside_relative_result[15:40,], aes(x = x + 180, y = relative_value, color = "Biomass Outside"), size = 1.5, alpha = 1) + # Red
   #geom_line(data = inside_y_relative_result[15:40,], aes(x = x + 180, y = relative_value, color = "Yield Inside"), size = 1.5, alpha = 0.7) + # Blue
-  geom_line(data = outside_y_relative_result[15:40,], aes(x = x + 180, y = relative_value, color = "Yield Outside"), size = 1.5, alpha = 1) + # Red
+  geom_line(data = y_relative_result[15:40,], aes(x = x + 180, y = relative_value, color = "Total Yield"), size = 1.5, alpha = 1) + # Red
   geom_vline(xintercept = 200, linetype = "dashed", color = "black") + # Add vertical line
   labs(x = "Time", y = "", color = "Legend") + # Legend title
   theme_minimal() +
   xlim(195, 220) +
-  ylim(0.9, 1.2) 
+  ylim(YLims[1],YLims[2]) 
+print(Gname)
 dev.off()
+}else{
+  YLims = c(0.5,1.5)
+  
+  #setEPS()
+  pdf(Line.Graph.Name)
+  Gname = ggplot() +
+    geom_line(data = inside_relative_result[15:40,], aes(x = x + 180, y = relative_value, color = "Biomass Inside"), size = 1.5, alpha = 1) + # Blue
+    geom_ribbon(data = inside_relative_result[15:40,], aes(x = x + 180, ymin = relative_value-sd, ymax = relative_value+sd, color = "Biomass Inside"), size = 0.25, alpha = 0.5,fill='red') + # Blue
+    geom_line(data = outside_relative_result[15:40,], aes(x = x + 180, y = relative_value, color = "Biomass Outside"), size = 1.5, alpha = 1) + # Red
+    geom_ribbon(data = outside_relative_result[15:40,], aes(x = x + 180, ymin = relative_value-sd, ymax = relative_value+sd, color = "Biomass Outside"), size = 0.25, alpha = 0.5,fill='green') + # Blue
+    #geom_line(data = inside_y_relative_result[15:40,], aes(x = x + 180, y = relative_value, color = "Yield Inside"), size = 1.5, alpha = 0.7) + # Blue
+    geom_line(data = y_relative_result[15:40,], aes(x = x + 180, y = relative_value, color = "Total Yield"), size = 1.5, alpha = 1) + # Red
+    geom_ribbon(data = y_relative_result[15:40,], aes(x = x + 180, ymin = relative_value-sd, ymax = relative_value+sd, color = "Yield Outside"), size = 0.25, alpha = 0.5,fill='blue') + # Blue
+    geom_vline(xintercept = 200, linetype = "dashed", color = "black") + # Add vertical line
+    labs(x = "Time", y = "", color = "Legend") + # Legend title
+    theme_minimal() +
+    xlim(195, 220) +
+    ylim(YLims[1],YLims[2])
+  print(Gname)
+  dev.off()
+  
+}
+
+
+if (nruns == 1){ # only do all the rest for deterministic plots:
+
 
 ##### PLOTS #####
 #CPUE
@@ -353,7 +403,6 @@ dataafter <- tibble(
 #   value = c(after_average_second_column, each = length(Longitude))
 # )
 
-### JVT ERROR LOCATION BELOW
 
 
 databefore$Latitude <- databefore$Latitude / 111
@@ -372,8 +421,6 @@ dataafter <- dataafter[dataafter$Longitude < 0, ]
 #dataafter <- dataafter[dataafter$Longitude >= -134, ]
 #dataafter <- dataafter[dataafter$Longitude >= -126, ]
 after_sf_data <- st_as_sf(dataafter, coords = c("Longitude", "Latitude"), crs = 4326)
-
-### JVT ERROR LOCATION ABOVE
 
 
 #Margaret commenting out lines to 381 10.16
@@ -403,14 +450,14 @@ dataafter$after_CPUE_215 <- after_CPUE_215
 dataafter$after_CPUE_220 <- after_CPUE_220
 
 
-#BEFORE OWF
-# Workin One
-ggplot(databefore, aes(x = Longitude, y = Latitude, fill = value)) +
-  geom_tile(aes(width = 0.1, height = 0.1)) +
-  scale_fill_gradient(low = "blue", high = "red") +
-  theme_minimal() +
-  theme(panel.grid = element_blank()) +
-  coord_fixed(ratio = 1)  # Maintain aspect ratio
+# #BEFORE OWF
+# # Workin One
+# ggplot(databefore, aes(x = Longitude, y = Latitude, fill = value)) +
+#   geom_tile(aes(width = 0.1, height = 0.1)) +
+#   scale_fill_gradient(low = "blue", high = "red") +
+#   theme_minimal() +
+#   theme(panel.grid = element_blank()) +
+#   coord_fixed(ratio = 1)  # Maintain aspect ratio
 
 #setEPS()
 #postscript("doversoleCPUEbefore_optionb.eps")
@@ -557,6 +604,10 @@ dataafter$harvest_215 <- harvest_215
 dataafter$harvest_220 <- harvest_220
 dataafter$harvest_199 <- harvest_199
 
+# dataafter <- dataafter %>%
+  # mutate(change_map = harvestafter - Harvest_before)
+dataafter$change_map <- (dataafter$harvest_220 - dataafter$harvest_199) / dataafter$harvest_199
+dataafter$change_map[is.nan(dataafter$change_map)] <- 0
 #setEPS()
 #postscript("lingcodharvestbefore_optionb.eps")
 ggplot() +
@@ -571,10 +622,10 @@ ggplot() +
   theme(axis.text.x = element_text(angle = 60, hjust = 1))
 
 
-###JVT REF
+### REF
 setEPS()
-postscript("Bdverhbefore_optionB.eps")
-ggplot() +
+postscript(Harvest.before.name)
+Gname = ggplot() +
   geom_point(data = databefore, aes(x = Longitude, y = Latitude, color = Harvest_before), shape = 15, size = 2.6) +
   geom_sf(data = coast, fill = "lightgray") +
    scale_color_viridis_c() +
@@ -589,76 +640,16 @@ ggplot() +
   ) +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 60, hjust = 1))
+print(Gname)
 dev.off()
 
-### JVT REF
-#setEPS()
-#postscript("doversoleharvestafter_optionb.eps")
-# ggplot() +
-#   geom_point(data = dataafter, aes(x = Longitude, y = Latitude, color = Harvest_after), shape = 15, size = 1.5) +
-#   geom_polygon(data = p_coosca,  aes(x = x, y = y), color = "pink", size = 1, fill = NA) +
-#   geom_polygon(data = brookingsca,  aes(x = x, y = y), color = "pink", size = 1, fill = NA) +
-#   geom_sf(data = coast, fill = "white") +
-#   scale_color_viridis_c() +
-#   labs(title = "Harvest After",
-#        x = "Longitude",
-#        y = "Latitude",
-#        color = "H_values") +
-#   theme_minimal()  +
-#   theme(axis.text.x = element_text(angle = 60, hjust = 1))
 
-##JVT
-##REF
-# ggplot() +
-#   geom_sf(data = coast, fill = "white") +
-#   geom_point(data = clean_JVT, aes(x = Up_Lng_f, y = Up_Lat_f), shape = 15, size = 0.25) +
-#   #geom_point(data = trawl_f, aes(x = Set_Long, y = Set_Lat), shape = 15, size = 0.25) +
-#   #geom_polygon(data = p_coosca,  aes(x = x, y = y), color = "pink", size = 1, fill = NA) +
-#   #geom_polygon(data = brookingsca,  aes(x = x, y = y), color = "pink", size = 1, fill = NA) +
-#   #geom_sf(data = coast, fill = "white") +
-#   scale_color_viridis_c() +
-#   labs(title = "fg_lingcod_f",
-#        x = "Up_Lng_f",
-#        y = "Up_Lat_f") +
-#   
-#        #color = "H_values") +
-#     coord_sf(
-#     xlim = c(-126, -122),
-#     ylim = c(41, 48),
-#     expand = FALSE
-#   ) +
-#   theme_minimal() +
-#   theme(axis.text.x = element_text(angle = 60, hjust = 1))
-# 
-
-##REF
-
-
-
-ggplot() +
-  geom_point(data = dataafter, aes(x = Longitude, y = Latitude, color = Harvest_after), shape = 15, size = 1.5) +
-  geom_polygon(data = p_coosca,  aes(x = x, y = y), color = "pink", size = 1, fill = NA) +
-  geom_polygon(data = p_brookingsca,  aes(x = x, y = y), color = "pink", size = 1, fill = NA) +
-  geom_sf(data = coast, fill = "white") +
-  #geom_sf(data = coast, fill = "white") +
-  scale_color_viridis_c() +
-  labs(title = "Harvest After",
-       x = "Longitude",
-       y = "Latitude",
-       color = "H_values") +
-  coord_sf(
-    xlim = c(-126, -122),
-    ylim = c(41, 48),
-    expand = FALSE
-  ) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 60, hjust = 1))
 
 #MAKE SURE YOU HAVE THE RIGHT BROOKINGS
 #dev.off()
 setEPS()
-postscript("Bdverharvestafter_option.eps")
-ggplot() +
+postscript(Harvest.after.name)
+Gname = ggplot() +
   geom_point(data = dataafter, aes(x = Longitude, y = Latitude, color = Harvest_after), shape = 15, size = 2.6) +
   geom_polygon(data = p_coosca,  aes(x = x, y = y), color = "pink", size = 1, fill = NA) +
   geom_polygon(data = brookingsca,  aes(x = x, y = y), color = "pink", size = 1, fill = NA) +
@@ -675,44 +666,80 @@ ggplot() +
   ) +
   theme_minimal()  +
   theme(axis.text.x = element_text(angle = 60, hjust = 1))
+print(Gname)
 dev.off()
 
-##
-#dataafter$Harvest_difference <- (dataafter$harvestafter - dataafter$Harvest_before)/(dataafter$Harvest_before)
-dataafter$Harvest_difference <- (dataafter$harvest_220 - dataafter$harvest_199)/
-  (dataafter$harvest_199)
+#which brookings change below #brookingsca
+setEPS()
+postscript(Harvest.change.name)
+Gname = ggplot() +
+  geom_point(data = dataafter, aes(x = Longitude, y = Latitude, color = change_map), shape = 15, size = 4) +
+  geom_polygon(data = p_coosca,  aes(x = x, y = y), color = "pink", size = 1, fill = NA) +
+  geom_polygon(data = brookingsca,  aes(x = x, y = y), color = "pink", size = 1, fill = NA) +
+  geom_sf(data = coast, fill = "lightgray") +
+   scale_color_gradient2(
+     low = "blue",
+     #mid = "pink",
+     high = "white",
+     #midpoint = 0,
+     name = "Harvest change"
+   )+
+  labs(title = "Harvest Change",
+       x = "Longitude",
+       y = "Latitude",
+       color = "H_values)") +
+  coord_sf(
+    xlim = c(-126, -122),
+    ylim = c(41.5, 44),
+    expand = FALSE
+  ) +
+  theme_minimal()  +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))
+print(Gname)
+dev.off()
 
-# Filter out NA values and values less than 0.001
-dataafter$Harvest_difference[is.nan(dataafter$Harvest_difference)] <- 0
-
-#dataafter_filtered <- dataafter %>%
-#  filter(Latitude < 45)
-
-#LAAT_filtered <- LAAT[LAAT < 45]
-#filtered_LOON <- head(LOON, 502)
-bbox <- st_bbox(ORshapefile)
-
-# Filter features below 45 degrees north
-#shapefile_filtered <- ORshapefile[bbox["ymax"] < 45, ]
-
-# Plotting the difference as a point graph
-#dataafter$Harvest_difference_clipped <- pmax(pmin(dataafter$Harvest_difference, 0.10), -0.10)
-filtered_dataafter <- dataafter[dataafter$Harvest_difference >= -0.025, ]
-# ggplot() +
-#   geom_sf(data = coast, fill = "lightblue") +
-#   geom_point(data = filtered_dataafter, aes(x = Longitude-0.35, y = Latitude+0.05, color = Harvest_difference), size = 1.5) +
-#   geom_polygon(data = p_coosca, aes(x = x, y = y), color = "black", fill = NA, size = 1) + # Represent Coos as a polygon
-#   geom_polygon(data = p_brookingsca, aes(x = x, y = y), color = "black", fill = NA, size = 1) + # Represent Brookings as a polygon
-#   scale_color_gradient2(low = "blue", mid = "white", high = "orange", midpoint = 0, 
-#                         limits = c(min(filtered_dataafter$Harvest_difference), max(filtered_dataafter$Harvest_difference)), 
-#                         name = "Proportional Changes") +
-#   labs(title = "Harvest Rates",
-#        x = "Longitude",
-#        y = "Latitude",
-#        color = "Proportional Changes") +
-#   theme_minimal() +
-#   theme(axis.text.x = element_text(angle = 60, hjust = 1))
+# ##
+# #dataafter$Harvest_difference <- (dataafter$harvestafter - dataafter$Harvest_before)/(dataafter$Harvest_before)
+# dataafter$Harvest_difference <- (dataafter$harvest_220 - dataafter$harvest_199)/
+#   (dataafter$harvest_199)
 # 
+# # Filter out NA values and values less than 0.001
+# dataafter$Harvest_difference[is.nan(dataafter$Harvest_difference)] <- 0
+# 
+# #dataafter_filtered <- dataafter %>%
+# #  filter(Latitude < 45)
+# 
+# #LAAT_filtered <- LAAT[LAAT < 45]
+# #filtered_LOON <- head(LOON, 502)
+# bbox <- st_bbox(ORshapefile)
+# 
+# # Filter features below 45 degrees north
+# #shapefile_filtered <- ORshapefile[bbox["ymax"] < 45, ]
+# 
+# # Plotting the difference as a point graph
+# #dataafter$Harvest_difference_clipped <- pmax(pmin(dataafter$Harvest_difference, 0.10), -0.10)
+# filtered_dataafter <- dataafter[dataafter$Harvest_difference >= -0.025, ]
+#  ggplot() +
+#    geom_point(data = filtered_dataafter, aes(x = Longitude-0.35, y = Latitude+0.05, color = Harvest_difference), size = 1.5) +
+#    geom_polygon(data = p_coosca, aes(x = x, y = y), color = "black", fill = NA, size = 1) + # Represent Coos as a polygon
+#    geom_polygon(data = p_brookingsca, aes(x = x, y = y), color = "black", fill = NA, size = 1) + # Represent Brookings as a polygon
+#    scale_color_gradient2(low = "blue", mid = "white", high = "orange", midpoint = 0, 
+#                          limits = c(min(filtered_dataafter$Harvest_difference), max(filtered_dataafter$Harvest_difference)), 
+#                          name = "Proportional Changes") +
+#    geom_sf(data = coast, fill = "lightgray") +
+#    scale_color_viridis_c() +
+#    labs(title = "Proportional Changes",
+#         x = "Longitude",
+#         y = "Latitude",
+#         color = "H_values)") +
+#    coord_sf(
+#      xlim = c(-126, -122),
+#      ylim = c(41, 48),
+#      expand = FALSE
+#    ) +
+#    theme_minimal()  +
+#    theme(axis.text.x = element_text(angle = 60, hjust = 1))
+#  
 
 filtered_dataafter_sf <- st_as_sf(dataafter, coords = c("Longitude", "Latitude"), crs = 4326)
 
@@ -760,34 +787,34 @@ filtered_dataafter_sfoutside_WEAs <- filtered_dataafter_sf[filtered_dataafter_sf
 
 
 
-#PLOTS WORK JUST DON"T NEED THEM
-ggplot() +
-  geom_sf(data = coast, fill = "lightblue") +
-  geom_point(data = dataafter, aes(x = LOON, y = LAAT, color = harvest_215), size = 0.25) +
-  geom_point(data = p_coosca,  aes(x = x, y = y), color = "pink", size = 3) +
-  geom_point(data = brookingsca,  aes(x = x, y = y), color = "pink", size = 3) +
-  scale_color_viridis_c() +
-  labs(title = "Harvest After 215",
-       x = "Longitude",
-       y = "Latitude",
-       color = "H_values)") +
-  theme_minimal()  +
-  theme(axis.text.x = element_text(angle = 60, hjust = 1))
-
-
-
-ggplot() +
-  geom_sf(data = coast, fill = "lightblue") +
-  geom_point(data = dataafter, aes(x = LOON, y = LAAT, color = harvest_220), size = 3) +
-  geom_point(data = p_coosca,  aes(x = x, y = y), color = "pink", size = 2) +
-  geom_point(data = p_brookingsca,  aes(x = x, y = y), color = "pink", size = 2) +
-  scale_color_viridis_c() +
-  labs(title = "Harvest After 220",
-       x = "Longitude",
-       y = "Latitude",
-       color = "H_values)") +
-  theme_minimal()  +
-  theme(axis.text.x = element_text(angle = 60, hjust = 1))
+# #PLOTS WORK JUST DON"T NEED THEM
+# ggplot() +
+#   geom_sf(data = coast, fill = "lightblue") +
+#   geom_point(data = dataafter, aes(x = LOON, y = LAAT, color = harvest_215), size = 0.25) +
+#   geom_point(data = p_coosca,  aes(x = x, y = y), color = "pink", size = 3) +
+#   geom_point(data = brookingsca,  aes(x = x, y = y), color = "pink", size = 3) +
+#   scale_color_viridis_c() +
+#   labs(title = "Harvest After 215",
+#        x = "Longitude",
+#        y = "Latitude",
+#        color = "H_values)") +
+#   theme_minimal()  +
+#   theme(axis.text.x = element_text(angle = 60, hjust = 1))
+# 
+# 
+# 
+# ggplot() +
+#   geom_sf(data = coast, fill = "lightblue") +
+#   geom_point(data = dataafter, aes(x = LOON, y = LAAT, color = harvest_220), size = 3) +
+#   geom_point(data = p_coosca,  aes(x = x, y = y), color = "pink", size = 2) +
+#   geom_point(data = p_brookingsca,  aes(x = x, y = y), color = "pink", size = 2) +
+#   scale_color_viridis_c() +
+#   labs(title = "Harvest After 220",
+#        x = "Longitude",
+#        y = "Latitude",
+#        color = "H_values)") +
+#   theme_minimal()  +
+#   theme(axis.text.x = element_text(angle = 60, hjust = 1))
 
 
 
@@ -825,6 +852,12 @@ dataafter$B_after <- B_after
 dataafter$B_210 <- B_210
 dataafter$B_215 <- B_215
 dataafter$B_220 <- B_220
+
+dataafter$change_bio <- ifelse(
+  dataafter$B_199 == 0,
+  0,
+  (dataafter$B_220 - dataafter$B_199) / dataafter$B_199
+)
 # 
 # dataafter$B_before[dataafter$B_before < 0.001] <- NA
 # plot(dataafter$B_before, type = "l", main = "Biomass Before OWF Areas", xlab = "Coastline", ylab = "Biomass Normalized")
@@ -953,8 +986,8 @@ filtered_dataafter_sfreduced <- filtered_dataafter_sf[filtered_dataafter_sf$with
 #   theme(axis.text.x = element_text(angle = 60, hjust = 1))
 1+1
 setEPS()
-postscript("Bdverbiomassbefore_optionB.eps")
-ggplot() +
+postscript(Biomass.before.name)
+Gname = ggplot() +
   geom_point(data = dataafter, aes(x = Longitude, y = Latitude, color = B_before), shape = 15, size = 2.6) +
   geom_sf(data = coast, fill = "lightgray") +
   scale_color_viridis_c() +
@@ -969,11 +1002,12 @@ ggplot() +
   ) +
   theme_minimal()  +
   theme(axis.text.x = element_text(angle = 60, hjust = 1))
+print(Gname)
 dev.off()
 #MAKE SURE YOU HAVE THE RiGHT BROOKINGS
 setEPS()
-postscript("Bdverbiomassafter_optionB.eps")
-ggplot() +
+postscript(Biomass.after.name)
+Gname = ggplot() +
   geom_point(data = dataafter, aes(x = Longitude, y = Latitude, color = B_after), shape = 15, size = 2.6) +
   geom_polygon(data = p_coosca,  aes(x = x, y = y), color = "pink", size = 1, fill = NA) +
   geom_polygon(data = brookingsca,  aes(x = x, y = y), color = "pink", size = 1, fill = NA) +
@@ -990,6 +1024,35 @@ ggplot() +
   ) +
   theme_minimal()  +
   theme(axis.text.x = element_text(angle = 60, hjust = 1))
+print(Gname)
+dev.off()
+
+setEPS()
+postscript(Biomass.change.name)
+Gname = ggplot() +
+  geom_point(data = dataafter, aes(x = Longitude, y = Latitude, color = change_bio), shape = 15, size = 4) +
+  geom_polygon(data = p_coosca,  aes(x = x, y = y), color = "pink", size = 1, fill = NA) +
+  geom_polygon(data = brookingsca,  aes(x = x, y = y), color = "pink", size = 1, fill = NA) +
+  geom_sf(data = coast, fill = "lightgray") +
+  scale_color_gradient2(
+    low = "white",
+    #mid = "pink",
+    high = "darkgreen",
+    #midpoint = 0,
+    name = "change_bio"
+  )+
+  labs(title = "Biomass Change",
+       x = "Longitude",
+       y = "Latitude",
+       color = "change_bio)") +
+  coord_sf(
+    xlim = c(-126, -122),
+    ylim = c(41.5, 44),
+    expand = FALSE
+  ) +
+  theme_minimal()  +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))
+print(Gname)
 dev.off()
 # ggplot() +
 #   geom_sf(data = coast, fill = "white") +
@@ -1118,8 +1181,11 @@ yielddataafter$yield_after_1 <- yielddataafter
 yielddataafter$Y_difference <- (yield_after_20 - yield_before_199)/yield_before_199
 
 # Filter out NA values and values less than 0.001
-#yielddataafter$Y_difference[yielddataafter$Y_difference < 0.001]
+yielddataafter$Y_difference[yielddataafter$Y_difference < 0.001]
 yielddataafter$Y_difference[is.nan(yielddataafter$Y_difference)] <- 0
+#yielddataafter$Y_difference[yield_before_199<0.01]=0
+yielddataafter$Y_difference[yield_before_199/max(yield_before_199)<0.01]=0
+#yielddataafter$Y_difference[yielddataafter$Y_difference == -1] <- -0.2 #playing around with for plot
 yielddataafter_filtered <- yielddataafter %>%
   filter(Latitude < 45)
 
@@ -1261,18 +1327,18 @@ outside_WEAs <- filtered_data_sf[filtered_data_sf$within_p_cpolygon == 0 & filte
 #   theme(axis.text.x = element_text(angle = 60, hjust = 1))
 # 
 
-#BEFORE OWF
-# Workin One
-ggplot(yielddatabefore, aes(x = LOON, y = LAAT, fill = value)) +
-  geom_tile(aes(width = 0.1, height = 0.1)) +
-  scale_fill_gradient(low = "blue", high = "red") +
-  theme_minimal() +
-  theme(panel.grid = element_blank()) +
-  coord_fixed(ratio = 1)  # Maintain aspect ratio
-
+# #BEFORE OWF
+# # Workin One
+# ggplot(yielddatabefore, aes(x = LOON, y = LAAT, fill = value)) +
+#   geom_tile(aes(width = 0.1, height = 0.1)) +
+#   scale_fill_gradient(low = "blue", high = "red") +
+#   theme_minimal() +
+#   theme(panel.grid = element_blank()) +
+#   coord_fixed(ratio = 1)  # Maintain aspect ratio
+1+1
 setEPS()
-postscript("Bdvernormalizedyieldbefore_optionB.eps")
-ggplot() +
+postscript(Yield.before.name)
+Gname = ggplot() +
   geom_point(data = yielddatabefore, aes(x = Longitude, y = Latitude, color = value), shape = 15, size = 2.6) +
   geom_sf(data = coast, fill = "lightgray") +
    scale_color_viridis_c() +
@@ -1287,12 +1353,13 @@ ggplot() +
   ) +
   theme_minimal()  +
   theme(axis.text.x = element_text(angle = 60, hjust = 1))
+print(Gname)
 dev.off()
 #FOR OPTION C - pcoos/pbrookings
 #MAKE SURE YOU HAVE THE RIGHT BROOKINGS
 setEPS()
-postscript("Bdvernormalized yield_optionB.eps")
-ggplot() +
+postscript(Yield.after.name)
+Gname = ggplot() +
   geom_point(data = yielddataafter, aes(x = Longitude, y = Latitude, color = value), shape = 15, size = 2.6) +
   geom_polygon(data = p_coosca,  aes(x = x, y = y), color = "pink", size = 1, fill = NA) +
   geom_polygon(data = brookingsca,  aes(x = x, y = y), color = "pink", size = 1, fill = NA) +
@@ -1309,7 +1376,52 @@ ggplot() +
   ) +
   theme_minimal()  +
   theme(axis.text.x = element_text(angle = 60, hjust = 1))
+print(Gname)
 dev.off()
+
+# combined <- yielddataafter %>%
+#   select(Latitude, Longitude, value_after = value) %>%
+#   left_join(
+#     yielddatabefore %>%
+#       select(Latitude, Longitude, value_before = value),
+#     by = c("Latitude", "Longitude")
+#   ) %>%
+#   mutate(Y_difference = value_after - value_before)
+
+setEPS()
+postscript(Yield.change.name)
+Gname = ggplot() +
+  geom_point(data = yielddataafter, aes(x = Longitude, y = Latitude, color = Y_difference), shape = 15, size = 4) +
+  geom_polygon(data = p_coosca,  aes(x = x, y = y), color = "pink", size = 1, fill = NA) +
+  geom_polygon(data = brookingsca,  aes(x = x, y = y), color = "pink", size = 1, fill = NA) +
+  geom_sf(data = coast, fill = "lightgray") +
+  scale_color_gradient2(
+    low = "darkgreen",
+    mid = "white",
+    high = "darkblue",
+    midpoint = -0.05,
+    name = "Yield change"
+  )+
+  labs(title = "Yield Change",
+       x = "Longitude",
+       y = "Latitude",
+       color = "Y_difference)") +
+  coord_sf(
+    xlim = c(-126, -122),
+    ylim = c(41.5, 46), #changed to 46 for more coastline
+    expand = FALSE
+  ) +
+  theme_minimal()  +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))
+print(Gname)
+dev.off()
+
+
+###### Done #####
+
+doExtra = FALSE
+
+if (doExtra){
 ggplot() +
   geom_sf(data = coast, fill = "lightblue") +
   geom_point(data = yield_after_10, aes(x = LOON, y = LAAT, color = yield_after_10), size = 3) +
@@ -1585,7 +1697,7 @@ plot(average_per_year_with_years, ylim = c(0.998, 1))
 #time course - changes 1 year after, 5 years after
 #changes right near the OWF first - before elsewhere
 
-line plots that dont really make sense
+#line plots that dont really make sense
 
 # Define the y-axis limits
 ylim <- c(0, 1)
@@ -1874,3 +1986,7 @@ ggplot(data_long, aes(x = Variables, y = Value, fill = color)) +
   theme_minimal() +
   theme(legend.position = "none") +
   ggtitle("species Option x")
+
+} # end doExtra
+} # End if nruns == 1
+}

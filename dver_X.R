@@ -253,8 +253,11 @@ coastline_function <- function() {
   p_coos_windfarm <- merged_data$p_within_coos
   p_brookings_windfarm <- merged_data$p_within_brookings
   
-  Sigma <- 0.0175
+  #Sigma <- 0.0175
+  Sigma <- 1.25
   #Sigma <- 17.5
+  # The homerange estimate is approximately the span of 40 fathoms on the shelf, from 100 to 140 fathoms. This is 182 m to 250 m, or
+  # approximately 5 km. So Sigma is 5000m/4
   
   #
   

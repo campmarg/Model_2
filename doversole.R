@@ -11,9 +11,11 @@ tparam <- function() {
   d <- 3.33  # Biomass exponent -> length-weight exponent
   t0 <- -3.7
   f <- 3.5
+  sigma_r <- 0.35
   #new f surviving = e^-f
   #-ln(1-exploitation rate)=f
   f <- -log(1 - 0.01)
+  steepness <- 0.8 # from the assessment (page ix)
   
   von_bertalanffy <- function(Ages, L_inf, k, t0) {
     L_t <- L_inf * (1 - exp(-k * (Ages - t0)))
@@ -73,6 +75,8 @@ tparam <- function() {
     b2 = b2,
     selectivity_t = selectivity_t,
     Af_t = Af_t,
-    LEP = LEP
+    LEP = LEP,
+    sigma_r = sigma_r,
+    steepness = steepness
   ))
 }

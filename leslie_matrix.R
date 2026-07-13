@@ -39,7 +39,9 @@ leslie_matrix <- function(params, Fvec_HR){
   A_i <- A[1:Amax]  
   MLing[1, 1:Amax] <- A_i # columns
   
-  SS = exp(-( M + f * params$Af_t + Fvec_HR)) 
+  #
+ # SS = exp(-( M + f * params$Af_t + Fvec_HR)) 
+  SS = exp(-( M + params$Af_t * Fvec_HR)) 
   
   MLing[2:Amax, 1:(Amax-1)] <- diag(SS[1:(Amax-1)]) # making diagonal survival rate
   
